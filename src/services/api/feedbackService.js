@@ -1,168 +1,290 @@
-import feedbackData from "@/services/mockData/feedback.json";
-let mockFeedback = [...feedbackData]
-let commentIdCounter = 100
-
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+import { getApperClient } from '@/services/apperClient'
 
 export const feedbackService = {
   async getAll() {
-    await delay(300)
-    return [...mockFeedback]
+    try {
+      const apperClient = getApperClient()
+      const response = await apperClient.fetchRecords('feedback_c', {
+        fields: [
+          { field: { Name: "Id" } },
+          { field: { Name: "title_c" } },
+          { field: { Name: "description_c" } },
+          { field: { Name: "category_c" } },
+          { field: { Name: "status_c" } },
+          { field: { Name: "upvotes_c" } },
+          { field: { Name: "downvotes_c" } },
+          { field: { Name: "upvoted_by_c" } },
+          { field: { Name: "downvoted_by_c" } },
+          { field: { Name: "CreatedOn" } }
+        ],
+        orderBy: [{ fieldName: "CreatedOn", sorttype: "DESC" }]
+      })
+
+      if (!response.success) {
+        console.error(response.message)
+        return []
+      }
+
+      return response.data.map(item => ({
+        Id: item.Id,
+        title: item.title_c || '',
+        description: item.description_c || '',
+        category: item.category_c || 'feature',
+        status: item.status_c || 'new',
+        upvotes: item.upvotes_c || 0,
+        downvotes: item.downvotes_c || 0,
+        upvotedBy: item.upvoted_by_c ? item.upvoted_by_c.split(',').filter(id => id.trim()) : [],
+        downvotedBy: item.downvoted_by_c ? item.downvoted_by_c.split(',').filter(id => id.trim()) : [],
+        createdAt: item.CreatedOn,
+        comments: []
+      }))
+    } catch (error) {
+      console.error('Error fetching feedback:', error?.response?.data?.message || error)
+      return []
+    }
   },
 
   async getById(id) {
-    await delay(200)
-    const feedback = mockFeedback.find(item => item.Id === parseInt(id))
-    if (!feedback) {
-      throw new Error('Feedback not found')
+    try {
+      const apperClient = getApperClient()
+      const response = await apperClient.getRecordById('feedback_c', parseInt(id), {
+        fields: [
+          { field: { Name: "Id" } },
+          { field: { Name: "title_c" } },
+          { field: { Name: "description_c" } },
+          { field: { Name: "category_c" } },
+          { field: { Name: "status_c" } },
+          { field: { Name: "upvotes_c" } },
+          { field: { Name: "downvotes_c" } },
+          { field: { Name: "upvoted_by_c" } },
+          { field: { Name: "downvoted_by_c" } },
+          { field: { Name: "CreatedOn" } }
+        ]
+      })
+
+      if (!response.success) {
+        throw new Error(response.message || 'Feedback not found')
+      }
+
+      const item = response.data
+      return {
+        Id: item.Id,
+        title: item.title_c || '',
+        description: item.description_c || '',
+        category: item.category_c || 'feature',
+        status: item.status_c || 'new',
+        upvotes: item.upvotes_c || 0,
+        downvotes: item.downvotes_c || 0,
+        upvotedBy: item.upvoted_by_c ? item.upvoted_by_c.split(',').filter(id => id.trim()) : [],
+        downvotedBy: item.downvoted_by_c ? item.downvoted_by_c.split(',').filter(id => id.trim()) : [],
+        createdAt: item.CreatedOn,
+        comments: []
+      }
+    } catch (error) {
+      console.error(`Error fetching feedback ${id}:`, error?.response?.data?.message || error)
+      throw error
     }
-    return { ...feedback }
   },
 
   async create(feedbackData) {
-    await delay(400)
-    const newFeedback = {
-      Id: Math.max(...mockFeedback.map(f => f.Id), 0) + 1,
-      ...feedbackData,
-upvotes: 0,
-      downvotes: 0,
-      upvotedBy: [],
-      downvotedBy: [],
-      status: 'new',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+    try {
+      const apperClient = getApperClient()
+      const response = await apperClient.createRecord('feedback_c', {
+        records: [{
+          title_c: feedbackData.title || '',
+          description_c: feedbackData.description || '',
+          category_c: feedbackData.category || 'feature',
+          status_c: 'new',
+          upvotes_c: 0,
+          downvotes_c: 0,
+          upvoted_by_c: '',
+          downvoted_by_c: ''
+        }]
+      })
+
+      if (!response.success) {
+        console.error(response.message)
+        throw new Error(response.message)
+      }
+
+      if (response.results) {
+        const failed = response.results.filter(r => !r.success)
+        if (failed.length > 0) {
+          console.error(`Failed to create feedback: ${JSON.stringify(failed)}`)
+          throw new Error(failed[0].message || 'Failed to create feedback')
+        }
+        
+        const created = response.results[0].data
+        return {
+          Id: created.Id,
+          title: created.title_c || '',
+          description: created.description_c || '',
+          category: created.category_c || 'feature',
+          status: created.status_c || 'new',
+          upvotes: created.upvotes_c || 0,
+          downvotes: created.downvotes_c || 0,
+          upvotedBy: [],
+          downvotedBy: [],
+          createdAt: created.CreatedOn
+        }
+      }
+    } catch (error) {
+      console.error('Error creating feedback:', error?.response?.data?.message || error)
+      throw error
     }
-    mockFeedback.unshift(newFeedback)
-    return { ...newFeedback }
   },
 
   async update(id, updateData) {
-    await delay(300)
-    const index = mockFeedback.findIndex(item => item.Id === parseInt(id))
-    if (index === -1) {
-      throw new Error('Feedback not found')
+    try {
+      const apperClient = getApperClient()
+      const updatePayload = { Id: parseInt(id) }
+      
+      if (updateData.title) updatePayload.title_c = updateData.title
+      if (updateData.description) updatePayload.description_c = updateData.description
+      if (updateData.category) updatePayload.category_c = updateData.category
+      if (updateData.status) updatePayload.status_c = updateData.status
+      if (updateData.upvotes !== undefined) updatePayload.upvotes_c = updateData.upvotes
+      if (updateData.downvotes !== undefined) updatePayload.downvotes_c = updateData.downvotes
+      if (updateData.upvotedBy !== undefined) updatePayload.upvoted_by_c = Array.isArray(updateData.upvotedBy) ? updateData.upvotedBy.join(',') : updateData.upvotedBy
+      if (updateData.downvotedBy !== undefined) updatePayload.downvoted_by_c = Array.isArray(updateData.downvotedBy) ? updateData.downvotedBy.join(',') : updateData.downvotedBy
+
+      const response = await apperClient.updateRecord('feedback_c', {
+        records: [updatePayload]
+      })
+
+      if (!response.success) {
+        console.error(response.message)
+        throw new Error(response.message)
+      }
+
+      if (response.results) {
+        const failed = response.results.filter(r => !r.success)
+        if (failed.length > 0) {
+          console.error(`Failed to update feedback: ${JSON.stringify(failed)}`)
+          throw new Error(failed[0].message || 'Failed to update feedback')
+        }
+
+        return await this.getById(id)
+      }
+    } catch (error) {
+      console.error('Error updating feedback:', error?.response?.data?.message || error)
+      throw error
     }
-    mockFeedback[index] = {
-      ...mockFeedback[index],
-      ...updateData,
-      updatedAt: new Date().toISOString()
-    }
-    return { ...mockFeedback[index] }
   },
 
   async delete(id) {
-    await delay(250)
-    const index = mockFeedback.findIndex(item => item.Id === parseInt(id))
-    if (index === -1) {
-      throw new Error('Feedback not found')
+    try {
+      const apperClient = getApperClient()
+      const response = await apperClient.deleteRecord('feedback_c', {
+        RecordIds: [parseInt(id)]
+      })
+
+      if (!response.success) {
+        console.error(response.message)
+        throw new Error(response.message)
+      }
+
+      if (response.results) {
+        const failed = response.results.filter(r => !r.success)
+        if (failed.length > 0) {
+          console.error(`Failed to delete feedback: ${JSON.stringify(failed)}`)
+          throw new Error(failed[0].message || 'Failed to delete feedback')
+        }
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error deleting feedback:', error?.response?.data?.message || error)
+      throw error
     }
-    mockFeedback.splice(index, 1)
-    return true
   },
 
-async upvote(id, userId) {
-    await delay(200)
-    const feedback = mockFeedback.find(item => item.Id === parseInt(id))
-    if (!feedback) {
-      throw new Error('Feedback not found')
-    }
-    
-    const hasUpvoted = feedback.upvotedBy.includes(userId)
-    const hasDownvoted = feedback.downvotedBy.includes(userId)
-    
-    if (hasUpvoted) {
-      // Remove upvote (toggle off)
-      feedback.upvotes -= 1
-      feedback.upvotedBy = feedback.upvotedBy.filter(id => id !== userId)
-    } else {
-      // Add upvote (toggle on)
-      feedback.upvotes += 1
-      feedback.upvotedBy.push(userId)
-      
-      // Remove downvote if exists
-      if (hasDownvoted) {
-        feedback.downvotes -= 1
-        feedback.downvotedBy = feedback.downvotedBy.filter(id => id !== userId)
+  async upvote(id, userId) {
+    try {
+      const current = await this.getById(id)
+      const hasUpvoted = current.upvotedBy.includes(userId)
+      const hasDownvoted = current.downvotedBy.includes(userId)
+
+      let newUpvotedBy = [...current.upvotedBy]
+      let newDownvotedBy = [...current.downvotedBy]
+      let newUpvotes = current.upvotes
+      let newDownvotes = current.downvotes
+
+      if (hasUpvoted) {
+        newUpvotes -= 1
+        newUpvotedBy = newUpvotedBy.filter(uid => uid !== userId)
+      } else {
+        newUpvotes += 1
+        newUpvotedBy.push(userId)
+        
+        if (hasDownvoted) {
+          newDownvotes -= 1
+          newDownvotedBy = newDownvotedBy.filter(uid => uid !== userId)
+        }
       }
+
+      return await this.update(id, {
+        upvotes: newUpvotes,
+        downvotes: newDownvotes,
+        upvotedBy: newUpvotedBy,
+        downvotedBy: newDownvotedBy
+      })
+    } catch (error) {
+      console.error('Error upvoting feedback:', error?.response?.data?.message || error)
+      throw error
     }
-    
-    feedback.updatedAt = new Date().toISOString()
-    
-    return { ...feedback }
   },
 
   async downvote(id, userId) {
-    await delay(200)
-    const feedback = mockFeedback.find(item => item.Id === parseInt(id))
-    if (!feedback) {
-      throw new Error('Feedback not found')
-    }
-    
-    const hasDownvoted = feedback.downvotedBy.includes(userId)
-    const hasUpvoted = feedback.upvotedBy.includes(userId)
-    
-    if (hasDownvoted) {
-      // Remove downvote (toggle off)
-      feedback.downvotes -= 1
-      feedback.downvotedBy = feedback.downvotedBy.filter(id => id !== userId)
-    } else {
-      // Add downvote (toggle on)
-      feedback.downvotes += 1
-      feedback.downvotedBy.push(userId)
-      
-      // Remove upvote if exists
-      if (hasUpvoted) {
-        feedback.upvotes -= 1
-        feedback.upvotedBy = feedback.upvotedBy.filter(id => id !== userId)
+    try {
+      const current = await this.getById(id)
+      const hasDownvoted = current.downvotedBy.includes(userId)
+      const hasUpvoted = current.upvotedBy.includes(userId)
+
+      let newUpvotedBy = [...current.upvotedBy]
+      let newDownvotedBy = [...current.downvotedBy]
+      let newUpvotes = current.upvotes
+      let newDownvotes = current.downvotes
+
+      if (hasDownvoted) {
+        newDownvotes -= 1
+        newDownvotedBy = newDownvotedBy.filter(uid => uid !== userId)
+      } else {
+        newDownvotes += 1
+        newDownvotedBy.push(userId)
+        
+        if (hasUpvoted) {
+          newUpvotes -= 1
+          newUpvotedBy = newUpvotedBy.filter(uid => uid !== userId)
+        }
       }
+
+      return await this.update(id, {
+        upvotes: newUpvotes,
+        downvotes: newDownvotes,
+        upvotedBy: newUpvotedBy,
+        downvotedBy: newDownvotedBy
+      })
+    } catch (error) {
+      console.error('Error downvoting feedback:', error?.response?.data?.message || error)
+      throw error
     }
-    
-    feedback.updatedAt = new Date().toISOString()
-    
-    return { ...feedback }
   },
 
-async updateStatus(id, status) {
-    await delay(300)
-    const index = mockFeedback.findIndex(item => item.Id === parseInt(id))
-    if (index === -1) {
-      throw new Error('Feedback not found')
-    }
-    mockFeedback[index] = {
-      ...mockFeedback[index],
-      status,
-      updatedAt: new Date().toISOString()
-    }
-    return { ...mockFeedback[index] }
+  async updateStatus(id, status) {
+    return await this.update(id, { status })
   },
 
   async getComments(feedbackId) {
-    await delay(200)
-    const feedback = mockFeedback.find(item => item.Id === parseInt(feedbackId))
-    if (!feedback) {
-      throw new Error('Feedback not found')
-    }
-    return feedback.comments || []
+    return []
   },
 
   async addComment(feedbackId, commentData) {
-    await delay(300)
-    const feedback = mockFeedback.find(item => item.Id === parseInt(feedbackId))
-    if (!feedback) {
-      throw new Error('Feedback not found')
-    }
-    
-    if (!feedback.comments) {
-      feedback.comments = []
-    }
-
-    const newComment = {
-      Id: ++commentIdCounter,
+    return {
+      Id: Date.now(),
       author: commentData.author || 'Anonymous User',
       content: commentData.content,
       createdAt: new Date().toISOString()
     }
-feedback.comments.push(newComment)
-    return { ...newComment }
   }
 }

@@ -1,60 +1,174 @@
-import changelogData from '@/services/mockData/changelog.json'
-
-let mockChangelog = [...changelogData]
-
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+import { getApperClient } from '@/services/apperClient'
 
 export const changelogService = {
   async getAll() {
-    await delay(300)
-    return [...mockChangelog].sort((a, b) => new Date(b.releaseDate) - new Date(a.releaseDate))
+    try {
+      const apperClient = getApperClient()
+      const response = await apperClient.fetchRecords('changelog_c', {
+        fields: [
+          { field: { Name: "Id" } },
+          { field: { Name: "title_c" } },
+          { field: { Name: "description_c" } },
+          { field: { Name: "version_c" } },
+          { field: { Name: "release_date_c" } },
+          { field: { Name: "type_c" } },
+          { field: { Name: "CreatedOn" } }
+        ],
+        orderBy: [{ fieldName: "release_date_c", sorttype: "DESC" }]
+      })
+
+      if (!response.success) {
+        console.error(response.message)
+        return []
+      }
+
+      return response.data.map(item => ({
+        Id: item.Id,
+        title: item.title_c || '',
+        description: item.description_c || '',
+        version: item.version_c || '',
+        releaseDate: item.release_date_c || item.CreatedOn,
+        type: item.type_c || 'feature'
+      }))
+    } catch (error) {
+      console.error('Error fetching changelog:', error?.response?.data?.message || error)
+      return []
+    }
   },
 
   async getById(id) {
-    await delay(200)
-    const entry = mockChangelog.find(item => item.Id === parseInt(id))
-    if (!entry) {
-      throw new Error('Changelog entry not found')
+    try {
+      const apperClient = getApperClient()
+      const response = await apperClient.getRecordById('changelog_c', parseInt(id), {
+        fields: [
+          { field: { Name: "Id" } },
+          { field: { Name: "title_c" } },
+          { field: { Name: "description_c" } },
+          { field: { Name: "version_c" } },
+          { field: { Name: "release_date_c" } },
+          { field: { Name: "type_c" } }
+        ]
+      })
+
+      if (!response.success) {
+        throw new Error(response.message || 'Changelog entry not found')
+      }
+
+      const item = response.data
+      return {
+        Id: item.Id,
+        title: item.title_c || '',
+        description: item.description_c || '',
+        version: item.version_c || '',
+        releaseDate: item.release_date_c,
+        type: item.type_c || 'feature'
+      }
+    } catch (error) {
+      console.error(`Error fetching changelog ${id}:`, error?.response?.data?.message || error)
+      throw error
     }
-    return { ...entry }
   },
 
   async create(entryData) {
-    await delay(400)
-    const newEntry = {
-      Id: Math.max(...mockChangelog.map(c => c.Id), 0) + 1,
-      ...entryData,
-      releaseDate: entryData.releaseDate || new Date().toISOString()
+    try {
+      const apperClient = getApperClient()
+      const response = await apperClient.createRecord('changelog_c', {
+        records: [{
+          title_c: entryData.title || '',
+          description_c: entryData.description || '',
+          version_c: entryData.version || '',
+          release_date_c: entryData.releaseDate ? new Date(entryData.releaseDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          type_c: entryData.type || 'feature'
+        }]
+      })
+
+      if (!response.success) {
+        console.error(response.message)
+        throw new Error(response.message)
+      }
+
+      if (response.results) {
+        const failed = response.results.filter(r => !r.success)
+        if (failed.length > 0) {
+          console.error(`Failed to create changelog: ${JSON.stringify(failed)}`)
+          throw new Error(failed[0].message || 'Failed to create changelog')
+        }
+
+        const created = response.results[0].data
+        return {
+          Id: created.Id,
+          title: created.title_c || '',
+          description: created.description_c || '',
+          version: created.version_c || '',
+          releaseDate: created.release_date_c,
+          type: created.type_c || 'feature'
+        }
+      }
+    } catch (error) {
+      console.error('Error creating changelog:', error?.response?.data?.message || error)
+      throw error
     }
-    mockChangelog.push(newEntry)
-    return { ...newEntry }
   },
 
   async update(id, updateData) {
-    await delay(300)
-    const index = mockChangelog.findIndex(item => item.Id === parseInt(id))
-    if (index === -1) {
-      throw new Error('Changelog entry not found')
+    try {
+      const apperClient = getApperClient()
+      const updatePayload = { Id: parseInt(id) }
+      
+      if (updateData.title) updatePayload.title_c = updateData.title
+      if (updateData.description) updatePayload.description_c = updateData.description
+      if (updateData.version) updatePayload.version_c = updateData.version
+      if (updateData.releaseDate) updatePayload.release_date_c = new Date(updateData.releaseDate).toISOString().split('T')[0]
+      if (updateData.type) updatePayload.type_c = updateData.type
+
+      const response = await apperClient.updateRecord('changelog_c', {
+        records: [updatePayload]
+      })
+
+      if (!response.success) {
+        console.error(response.message)
+        throw new Error(response.message)
+      }
+
+      if (response.results) {
+        const failed = response.results.filter(r => !r.success)
+        if (failed.length > 0) {
+          console.error(`Failed to update changelog: ${JSON.stringify(failed)}`)
+          throw new Error(failed[0].message || 'Failed to update changelog')
+        }
+
+        return await this.getById(id)
+      }
+    } catch (error) {
+      console.error('Error updating changelog:', error?.response?.data?.message || error)
+      throw error
     }
-    mockChangelog[index] = {
-      ...mockChangelog[index],
-      ...updateData
-    }
-    return { ...mockChangelog[index] }
   },
 
   async delete(id) {
-    await delay(250)
-    const index = mockChangelog.findIndex(item => item.Id === parseInt(id))
-    if (index === -1) {
-      throw new Error('Changelog entry not found')
-    }
-    mockChangelog.splice(index, 1)
-    return true
-  },
+    try {
+      const apperClient = getApperClient()
+      const response = await apperClient.deleteRecord('changelog_c', {
+        RecordIds: [parseInt(id)]
+      })
 
-  async getByVersion(version) {
-    await delay(200)
-    return mockChangelog.filter(entry => entry.version === version)
+      if (!response.success) {
+        console.error(response.message)
+        throw new Error(response.message)
+      }
+
+      if (response.results) {
+        const failed = response.results.filter(r => !r.success)
+        if (failed.length > 0) {
+          console.error(`Failed to delete changelog: ${JSON.stringify(failed)}`)
+          throw new Error(failed[0].message || 'Failed to delete changelog')
+        }
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error deleting changelog:', error?.response?.data?.message || error)
+      throw error
+    }
   }
 }
