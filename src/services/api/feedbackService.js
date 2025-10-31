@@ -199,10 +199,10 @@ export const feedbackService = {
     }
   },
 
-  async upvote(id, userId) {
+async upvote(id, userId) {
     try {
       const current = await this.getById(id)
-      const hasUpvoted = current.upvotedBy.includes(userId)
+      const hasUpvoted = current.upvotedBy.includes(String(userId))
       const hasDownvoted = current.downvotedBy.includes(userId)
 
       let newUpvotedBy = [...current.upvotedBy]
@@ -212,14 +212,14 @@ export const feedbackService = {
 
       if (hasUpvoted) {
         newUpvotes -= 1
-        newUpvotedBy = newUpvotedBy.filter(uid => uid !== userId)
+newUpvotedBy = newUpvotedBy.filter(uid => uid !== String(userId))
       } else {
         newUpvotes += 1
-        newUpvotedBy.push(userId)
+        newUpvotedBy.push(String(userId))
         
         if (hasDownvoted) {
           newDownvotes -= 1
-          newDownvotedBy = newDownvotedBy.filter(uid => uid !== userId)
+          newDownvotedBy = newDownvotedBy.filter(uid => uid !== String(userId))
         }
       }
 
@@ -235,10 +235,10 @@ export const feedbackService = {
     }
   },
 
-  async downvote(id, userId) {
+async downvote(id, userId) {
     try {
       const current = await this.getById(id)
-      const hasDownvoted = current.downvotedBy.includes(userId)
+      const hasDownvoted = current.downvotedBy.includes(String(userId))
       const hasUpvoted = current.upvotedBy.includes(userId)
 
       let newUpvotedBy = [...current.upvotedBy]
@@ -248,14 +248,14 @@ export const feedbackService = {
 
       if (hasDownvoted) {
         newDownvotes -= 1
-        newDownvotedBy = newDownvotedBy.filter(uid => uid !== userId)
+newDownvotedBy = newDownvotedBy.filter(uid => uid !== String(userId))
       } else {
         newDownvotes += 1
-        newDownvotedBy.push(userId)
+        newDownvotedBy.push(String(userId))
         
         if (hasUpvoted) {
           newUpvotes -= 1
-          newUpvotedBy = newUpvotedBy.filter(uid => uid !== userId)
+          newUpvotedBy = newUpvotedBy.filter(uid => uid !== String(userId))
         }
       }
 
@@ -279,10 +279,10 @@ export const feedbackService = {
     return []
   },
 
-  async addComment(feedbackId, commentData) {
+async addComment(feedbackId, commentData) {
     return {
       Id: Date.now(),
-      author: commentData.author || 'Anonymous User',
+      author: commentData.author,
       content: commentData.content,
       createdAt: new Date().toISOString()
     }

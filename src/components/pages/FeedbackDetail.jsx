@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
 import { motion } from 'framer-motion'
 import { toast } from 'react-toastify'
 import { feedbackService } from '@/services/api/feedbackService'
@@ -14,8 +15,9 @@ import Empty from '@/components/ui/Empty'
 import { formatDistanceToNow } from 'date-fns'
 
 const FeedbackDetail = () => {
-  const { id } = useParams()
+const { id } = useParams()
   const navigate = useNavigate()
+  const { user, isAuthenticated } = useSelector(state => state.user)
   const [feedback, setFeedback] = useState(null)
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -50,9 +52,15 @@ const FeedbackDetail = () => {
     }
   }
 
-  const handleVote = async (feedbackId, voteType) => {
+const handleVote = async (feedbackId, voteType) => {
+    // Check authentication before allowing vote
+    if (!isAuthenticated || !user) {
+      navigate(`/login?redirect=/feedback/${id}`)
+      return
+    }
+
     try {
-      await feedbackService.vote(feedbackId, voteType, 'currentUser')
+      await feedbackService.vote(feedbackId, voteType, user.userId)
       const updatedFeedback = await feedbackService.getById(id)
       setFeedback(updatedFeedback)
       toast.success(`Vote ${voteType === 'upvote' ? 'added' : 'removed'}!`)
@@ -61,9 +69,15 @@ const FeedbackDetail = () => {
     }
   }
 
-  const handleSubmitComment = async (e) => {
+const handleSubmitComment = async (e) => {
     e.preventDefault()
     
+    // Check authentication before allowing comment
+    if (!isAuthenticated || !user) {
+      navigate(`/login?redirect=/feedback/${id}`)
+      return
+    }
+
     if (!newComment.trim()) {
       toast.error('Please enter a comment')
       return
@@ -73,7 +87,7 @@ const FeedbackDetail = () => {
       setSubmitting(true)
       const comment = await feedbackService.addComment(id, {
         content: newComment.trim(),
-        author: 'Current User'
+        author: `${user.firstName} ${user.lastName}`
       })
       
       setComments(prev => [...prev, comment])
@@ -133,8 +147,8 @@ const FeedbackDetail = () => {
           <VoteButton
             upvotes={feedback.upvotes}
             downvotes={feedback.downvotes}
-            hasUpvoted={feedback.upvotedBy?.includes('currentUser')}
-            hasDownvoted={feedback.downvotedBy?.includes('currentUser')}
+hasUpvoted={feedback.upvotedBy?.includes(user?.userId)}
+            hasDownvoted={feedback.downvotedBy?.includes(user?.userId)}
             onVote={(voteType) => handleVote(feedback.Id, voteType)}
             orientation="vertical"
           />

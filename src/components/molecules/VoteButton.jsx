@@ -11,7 +11,9 @@ const VoteButton = ({
   hasUpvoted = false, 
   hasDownvoted = false, 
   onUpvote, 
-  onDownvote, 
+  onDownvote,
+  isAuthenticated = false,
+  onAuthRequired,
   className = "" 
 }) => {
   const [isVoting, setIsVoting] = useState(false)
